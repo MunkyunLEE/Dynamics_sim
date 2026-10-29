@@ -208,7 +208,7 @@ export class Viewer {
     const size = box.getSize(new THREE.Vector3());
     this.modelSize = Math.max(size.x, size.y, size.z, 1);
     const radius = this.modelSize * 0.5;
-    const dist = (radius / Math.tan((this.camera.fov * Math.PI) / 360)) * 1.6;
+    const dist = (radius / Math.tan((this.camera.fov * Math.PI) / 360)) * 2.4;
 
     this.camera.position.copy(center).add(new THREE.Vector3(1, -1.2, 0.8).normalize().multiplyScalar(dist));
     this.camera.near = Math.max(dist / 1000, 0.01);
