@@ -61,7 +61,7 @@ function groundKinematics(acc: Float64Array, dt: number): { v: Float64Array; d: 
 }
 
 export function solveTimeHistory(model: StructuralModel, input: MotionInput, options: TimeHistoryOptions): TimeHistoryResult {
-  if (model.bars.length === 0) throw new Error('바 요소가 없습니다. 현재 단계에서는 바 요소만 해석합니다.');
+  if (model.bars.length === 0 && model.panels.length === 0) throw new Error('해석할 바 또는 쉘 요소가 없습니다.');
   const inputIds = model.inputNodes ?? [];
   const outputIds = model.outputNodes ?? [];
   if (inputIds.length === 0) throw new Error('입력 절점이 없습니다. 절점을 선택해 우클릭 → 입력 절점으로 지정해 주세요.');
@@ -72,7 +72,6 @@ export function solveTimeHistory(model: StructuralModel, input: MotionInput, opt
   const asm = assemble(model, false);
   const total = asm.nodeCount * 6;
   const notes = [...asm.notes];
-  if (model.panels.length > 0) notes.push('쉘 패널은 아직 해석에 포함되지 않습니다 (바 요소만 해석).');
 
   const inputSet = new Set(inputIds);
   const status = new Uint8Array(total);

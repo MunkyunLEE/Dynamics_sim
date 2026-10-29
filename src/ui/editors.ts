@@ -288,7 +288,7 @@ export function openClosedShellDialog(env: EditorEnv, panelIdx: number): void {
     { class: 'form-body' },
     h('div', { class: `verdict ${check.closed && check.consistent ? 'ok' : 'bad'}` }, verdict),
     table,
-    h('div', { class: 'hint' }, `현재 지정: ${kind === 'solid' ? '솔리드' : '쉘'} · 현재 해석은 바 요소만 포함하며, 솔리드/쉘 해석은 이후 단계에서 지원합니다.`)
+    h('div', { class: 'hint' }, `현재 지정: ${kind === 'solid' ? '솔리드' : '쉘'} · 솔리드로 지정하면 강성 없이 질량(부피×밀도)만 해석에 반영됩니다.`)
   );
   const canSolid = check.closed && check.consistent;
   openDialog('닫힌 쉘 판정', body, [

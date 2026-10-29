@@ -30,7 +30,7 @@ export function factorMass(M: Float64Array, n: number, notes: string[]): Float64
 }
 
 export function solveModal(model: StructuralModel, options: ModalOptions): ModalResult {
-  if (model.bars.length === 0) throw new Error('바 요소가 없습니다. 현재 단계에서는 바 요소만 해석합니다.');
+  if (model.bars.length === 0 && model.panels.length === 0) throw new Error('해석할 바 또는 쉘 요소가 없습니다.');
   const constrained = options.type === 'constrained';
   if (constrained && model.supports.length === 0) throw new Error('지점이 없습니다. Free-free 해석을 선택하거나 지점을 추가해 주세요.');
 
@@ -38,7 +38,6 @@ export function solveModal(model: StructuralModel, options: ModalOptions): Modal
   const n = asm.n;
   if (n === 0) throw new Error('해석할 자유도가 없습니다.');
   const notes = [...asm.notes];
-  if (model.panels.length > 0) notes.push('쉘 패널은 아직 해석에 포함되지 않습니다 (바 요소만 해석).');
 
   const L = factorMass(asm.M, n, notes);
   const A = standardForm(asm.K, L, n);

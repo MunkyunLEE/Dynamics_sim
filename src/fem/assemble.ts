@@ -1,5 +1,7 @@
 import type { BarSection, Material, StructuralModel } from '../core/model';
 import { barMatrices } from './bar';
+import { shellMatrices } from './shell';
+import { checkClosedShell } from '../geometry/closedShell';
 
 export const MAX_DENSE_DOF = 1500;
 
@@ -12,6 +14,12 @@ export interface Assembly {
   nodeIndex: Map<number, number>;
   nodeCount: number;
   notes: string[];
+}
+
+function triArea(a: [number, number, number], b: [number, number, number], c: [number, number, number]): number {
+  const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+  return 0.5 * Math.hypot(u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]);
 }
 
 export function assemble(model: StructuralModel, applySupports: boolean): Assembly {
@@ -45,10 +53,53 @@ export function assemble(model: StructuralModel, applySupports: boolean): Assemb
     elements.push({ dofs, k: em.k, m: em.m });
   }
 
-  for (const lump of model.masses) {
-    const i = nodeIndex.get(lump.node)!;
-    for (let d = 0; d < 3; d++) mdiag[i * 6 + d] += lump.m;
-    if (lump.I) for (let d = 0; d < 3; d++) mdiag[i * 6 + 3 + d] += lump.I[d];
+  const lumps: { i: number; m: number; I?: [number, number, number] }[] = model.masses.map((l) => ({ i: nodeIndex.get(l.node)!, m: l.m, I: l.I }));
+  let shellCount = 0;
+  let solidCount = 0;
+  let skipped = 0;
+  model.panels.forEach((panel, pi) => {
+    const mat = mats.get(panel.mat)!;
+    if (panel.kind === 'solid') {
+      solidCount++;
+      const check = checkClosedShell(model, pi);
+      const total = Math.abs(check.volume) * mat.rho;
+      const share = new Map<number, number>();
+      let areaSum = 0;
+      for (const t of panel.tris) {
+        const q = t.map((id) => model.nodes[nodeIndex.get(id)!].xyz);
+        const ar = triArea(q[0], q[1], q[2]);
+        areaSum += ar;
+        for (const id of t) share.set(id, (share.get(id) ?? 0) + ar / 3);
+      }
+      if (areaSum > 0) for (const [id, a] of share) lumps.push({ i: nodeIndex.get(id)!, m: (total * a) / areaSum });
+      return;
+    }
+    const sec = secs.get(panel.sec);
+    if (!sec || sec.type !== 'shell') throw new Error(`패널 ${panel.id}: 쉘 단면(두께)이 아닙니다.`);
+    for (const t of panel.tris) {
+      const ids = t.map((id) => nodeIndex.get(id)!);
+      const em = shellMatrices([model.nodes[ids[0]].xyz, model.nodes[ids[1]].xyz, model.nodes[ids[2]].xyz], mat, sec.thickness);
+      if (!em) {
+        skipped++;
+        continue;
+      }
+      const dofs: number[] = [];
+      for (const ni of ids) for (let d = 0; d < 6; d++) dofs.push(ni * 6 + d);
+      for (let a = 0; a < 18; a++) {
+        kdiag[dofs[a]] += Math.abs(em.k[a * 18 + a]);
+        mdiag[dofs[a]] += Math.abs(em.m[a * 18 + a]);
+      }
+      elements.push({ dofs, k: em.k, m: em.m });
+      shellCount++;
+    }
+  });
+  if (shellCount > 0) notes.push(`쉘 삼각형 ${shellCount}개를 해석에 포함했습니다 (막 CST + 휨 DKT).`);
+  if (solidCount > 0) notes.push(`솔리드로 지정된 패널 ${solidCount}개는 강성 없이 질량(부피×밀도)만 표면 절점에 분배했습니다.`);
+  if (skipped > 0) notes.push(`면적이 0인 삼각형 ${skipped}개를 건너뛰었습니다.`);
+
+  for (const lump of lumps) {
+    for (let d = 0; d < 3; d++) mdiag[lump.i * 6 + d] += lump.m;
+    if (lump.I) for (let d = 0; d < 3; d++) mdiag[lump.i * 6 + 3 + d] += lump.I[d];
   }
 
   const fixed = new Uint8Array(total);
@@ -89,26 +140,26 @@ export function assemble(model: StructuralModel, applySupports: boolean): Assemb
   const K = new Float64Array(n * n);
   const M = new Float64Array(n * n);
   for (const el of elements) {
-    for (let a = 0; a < 12; a++) {
+    const nd = el.dofs.length;
+    for (let a = 0; a < nd; a++) {
       const ra = reduced[el.dofs[a]];
       if (ra < 0) continue;
-      for (let b = 0; b < 12; b++) {
+      for (let b = 0; b < nd; b++) {
         const rb = reduced[el.dofs[b]];
         if (rb < 0) continue;
-        K[ra * n + rb] += el.k[a * 12 + b];
-        M[ra * n + rb] += el.m[a * 12 + b];
+        K[ra * n + rb] += el.k[a * nd + b];
+        M[ra * n + rb] += el.m[a * nd + b];
       }
     }
   }
-  for (const lump of model.masses) {
-    const i = nodeIndex.get(lump.node)!;
+  for (const lump of lumps) {
     for (let d = 0; d < 3; d++) {
-      const r = reduced[i * 6 + d];
+      const r = reduced[lump.i * 6 + d];
       if (r >= 0) M[r * n + r] += lump.m;
     }
     if (lump.I) {
       for (let d = 0; d < 3; d++) {
-        const r = reduced[i * 6 + 3 + d];
+        const r = reduced[lump.i * 6 + 3 + d];
         if (r >= 0) M[r * n + r] += lump.I[d];
       }
     }
