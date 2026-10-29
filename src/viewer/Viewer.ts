@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { StructuralModel } from '../core/model';
+import type { Selection } from '../core/selection';
 
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
@@ -9,16 +10,29 @@ interface Target {
   nodes: Int32Array;
 }
 
+export interface ModelOptions {
+  fit?: boolean;
+  barColors?: number[] | null;
+}
+
 export class Viewer {
+  readonly camera: THREE.PerspectiveCamera;
+  readonly controls: OrbitControls;
+  readonly canvas: HTMLCanvasElement;
+  panelMeshes: THREE.Mesh[] = [];
+  barNodes = new Int32Array(0);
+  panelNodes: Int32Array[] = [];
+  private panelTris: number[][] = [];
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
-  private camera: THREE.PerspectiveCamera;
-  private controls: OrbitControls;
   private modelGroup = new THREE.Group();
+  private overlay = new THREE.Group();
   private helpers = new THREE.Group();
   private targets: Target[] = [];
+  private overlayTargets: Target[] = [];
   private panelGeoms: THREE.BufferGeometry[] = [];
   private base = new Float64Array(0);
+  private model: StructuralModel | null = null;
   private modelSize = 1;
   private shape: Float64Array | null = null;
   private amplitude = 1;
@@ -26,13 +40,14 @@ export class Viewer {
   private phase = 0;
   private lastTime = 0;
 
-  constructor(private host: HTMLElement) {
+  constructor(readonly host: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(window.devicePixelRatio);
-    host.appendChild(this.renderer.domElement);
+    this.canvas = this.renderer.domElement;
+    host.appendChild(this.canvas);
 
     this.scene.background = new THREE.Color(0x1b1e23);
-    this.scene.add(this.modelGroup, this.helpers);
+    this.scene.add(this.modelGroup, this.overlay, this.helpers);
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.8));
     const sun = new THREE.DirectionalLight(0xffffff, 1.2);
     sun.position.set(1, -2, 3);
@@ -42,12 +57,16 @@ export class Viewer {
     this.camera.up.set(0, 0, 1);
     this.camera.position.set(8000, -8000, 6000);
 
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = true;
 
     new ResizeObserver(() => this.resize()).observe(host);
     this.resize();
     this.renderer.setAnimationLoop((time: number) => this.frame(time));
+  }
+
+  getBase(): Float64Array {
+    return this.base;
   }
 
   private frame(time: number): void {
@@ -82,19 +101,22 @@ export class Viewer {
     }
   }
 
-  private applyShape(s: number): void {
+  private applyTargets(list: Target[], k: number): void {
     const shape = this.shape;
-    const k = this.amplitude * this.modelSize * 0.1 * s;
-    for (const t of this.targets) {
+    for (const t of list) {
       const arr = t.attr.array as Float32Array;
       for (let i = 0; i < t.nodes.length; i++) {
         const n = t.nodes[i] * 3;
-        for (let d = 0; d < 3; d++) {
-          arr[i * 3 + d] = this.base[n + d] + (shape ? shape[n + d] * k : 0);
-        }
+        for (let d = 0; d < 3; d++) arr[i * 3 + d] = this.base[n + d] + (shape ? shape[n + d] * k : 0);
       }
       t.attr.needsUpdate = true;
     }
+  }
+
+  private applyShape(s: number): void {
+    const k = this.amplitude * this.modelSize * 0.1 * s;
+    this.applyTargets(this.targets, k);
+    this.applyTargets(this.overlayTargets, k);
     for (const g of this.panelGeoms) g.computeVertexNormals();
   }
 
@@ -114,20 +136,29 @@ export class Viewer {
     if (this.shape && !playing) this.applyShape(Math.sin(this.phase));
   }
 
-  private register(geom: THREE.BufferGeometry, nodes: number[]): THREE.BufferAttribute {
+  private register(list: Target[], geom: THREE.BufferGeometry, nodes: ArrayLike<number>): THREE.BufferAttribute {
     const pos: number[] = [];
-    for (const n of nodes) pos.push(this.base[n * 3], this.base[n * 3 + 1], this.base[n * 3 + 2]);
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      pos.push(this.base[n * 3], this.base[n * 3 + 1], this.base[n * 3 + 2]);
+    }
     const attr = new THREE.Float32BufferAttribute(pos, 3);
     geom.setAttribute('position', attr);
-    this.targets.push({ attr, nodes: Int32Array.from(nodes) });
+    list.push({ attr, nodes: Int32Array.from(nodes) });
     return attr;
   }
 
-  setModel(model: StructuralModel): void {
+  setModel(model: StructuralModel, opts: ModelOptions = {}): void {
     this.clearGroup(this.modelGroup);
+    this.clearGroup(this.overlay);
     this.targets = [];
+    this.overlayTargets = [];
     this.panelGeoms = [];
+    this.panelMeshes = [];
+    this.panelTris = [];
+    this.panelNodes = [];
     this.shape = null;
+    this.model = model;
 
     const index = new Map<number, number>();
     this.base = new Float64Array(model.nodes.length * 3);
@@ -141,26 +172,42 @@ export class Viewer {
       this.modelGroup.add(obj);
     };
 
+    this.barNodes = new Int32Array(model.bars.length * 2);
+    model.bars.forEach((b, i) => {
+      this.barNodes[i * 2] = index.get(b.n[0])!;
+      this.barNodes[i * 2 + 1] = index.get(b.n[1])!;
+    });
+
     if (model.bars.length > 0) {
-      const nodes: number[] = [];
-      for (const b of model.bars) nodes.push(index.get(b.n[0])!, index.get(b.n[1])!);
       const g = new THREE.BufferGeometry();
-      this.register(g, nodes);
-      add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x4da3ff })));
+      this.register(this.targets, g, this.barNodes);
+      const colors = opts.barColors;
+      if (colors) {
+        const rgb: number[] = [];
+        const c = new THREE.Color();
+        for (let i = 0; i < model.bars.length; i++) {
+          c.setHex(colors[i] ?? 0x4da3ff);
+          rgb.push(c.r, c.g, c.b, c.r, c.g, c.b);
+        }
+        g.setAttribute('color', new THREE.Float32BufferAttribute(rgb, 3));
+      }
+      add(new THREE.LineSegments(g, new THREE.LineBasicMaterial(colors ? { vertexColors: true } : { color: 0x4da3ff })));
     }
 
     const allNodes = model.nodes.map((_, i) => i);
-    for (const panel of model.panels) {
+    model.panels.forEach((panel, pi) => {
       const g = new THREE.BufferGeometry();
-      const attr = this.register(g, allNodes);
+      const attr = this.register(this.targets, g, allNodes);
       const idx: number[] = [];
       const edges = new Set<string>();
       const edgeIdx: number[] = [];
+      const used = new Set<number>();
       for (const t of panel.tris) {
         const a = index.get(t[0])!;
         const b = index.get(t[1])!;
         const c = index.get(t[2])!;
         idx.push(a, b, c);
+        used.add(a).add(b).add(c);
         for (const [p, q] of [[a, b], [b, c], [c, a]]) {
           const key = p < q ? `${p}_${q}` : `${q}_${p}`;
           if (!edges.has(key)) {
@@ -172,41 +219,103 @@ export class Viewer {
       g.setIndex(idx);
       g.computeVertexNormals();
       this.panelGeoms.push(g);
-      add(
-        new THREE.Mesh(
-          g,
-          new THREE.MeshStandardMaterial({ color: 0x9aa7b8, transparent: true, opacity: 0.45, side: THREE.DoubleSide })
-        )
+      this.panelTris[pi] = idx;
+      this.panelNodes[pi] = Int32Array.from(used);
+      const solid = panel.kind === 'solid';
+      const mesh = new THREE.Mesh(
+        g,
+        new THREE.MeshStandardMaterial({
+          color: solid ? 0xb59a6b : 0x9aa7b8,
+          transparent: true,
+          opacity: solid ? 0.6 : 0.45,
+          side: THREE.DoubleSide
+        })
       );
+      mesh.userData.panel = pi;
+      this.panelMeshes.push(mesh);
+      add(mesh);
       const eg = new THREE.BufferGeometry();
       eg.setAttribute('position', attr);
       eg.setIndex(edgeIdx);
-      add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0xc9d3e0 })));
-    }
+      add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: solid ? 0xe0c48a : 0xc9d3e0 })));
+    });
 
-    this.addPoints(allNodes, 0xe6edf7, 5, add);
+    const nodePts = this.base.length / 3;
+    this.addPoints(this.range(nodePts), 0xe6edf7, 5, add);
     this.addPoints(model.supports.map((s) => index.get(s.node)!), 0xffa94d, 11, add);
     this.addPoints(model.masses.map((m) => index.get(m.node)!), 0xff5fa2, 9, add);
 
-    this.fit();
+    if (opts.fit === false) this.updateBounds();
+    else this.fit();
+  }
+
+  private range(n: number): number[] {
+    return Array.from({ length: n }, (_, i) => i);
   }
 
   private addPoints(nodes: number[], color: number, size: number, add: (o: THREE.Object3D) => void): void {
     if (nodes.length === 0) return;
     const g = new THREE.BufferGeometry();
-    this.register(g, nodes);
+    this.register(this.targets, g, nodes);
     add(new THREE.Points(g, new THREE.PointsMaterial({ color, size, sizeAttenuation: false })));
   }
 
-  fit(): void {
+  setSelection(sel: Selection): void {
+    this.clearGroup(this.overlay);
+    this.overlayTargets = [];
+    if (!this.model) return;
+    const add = (obj: THREE.Object3D): void => {
+      obj.frustumCulled = false;
+      obj.renderOrder = 10;
+      this.overlay.add(obj);
+    };
+
+    if (sel.bars.size > 0) {
+      const nodes: number[] = [];
+      for (const bi of sel.bars) nodes.push(this.barNodes[bi * 2], this.barNodes[bi * 2 + 1]);
+      const g = new THREE.BufferGeometry();
+      this.register(this.overlayTargets, g, nodes);
+      add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xffe066, depthTest: false })));
+      const ends = new THREE.BufferGeometry();
+      this.register(this.overlayTargets, ends, nodes);
+      add(new THREE.Points(ends, new THREE.PointsMaterial({ color: 0xffe066, size: 7, sizeAttenuation: false, depthTest: false })));
+    }
+
+    if (sel.nodes.size > 0) {
+      const g = new THREE.BufferGeometry();
+      this.register(this.overlayTargets, g, [...sel.nodes]);
+      add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffe066, size: 15, sizeAttenuation: false, depthTest: false })));
+    }
+
+    for (const pi of sel.panels) {
+      const g = new THREE.BufferGeometry();
+      this.register(this.overlayTargets, g, this.range(this.base.length / 3));
+      g.setIndex(this.panelTris[pi]);
+      add(
+        new THREE.Mesh(
+          g,
+          new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthTest: false })
+        )
+      );
+    }
+  }
+
+  private updateBounds(): THREE.Box3 {
     const box = new THREE.Box3();
     for (let i = 0; i < this.base.length; i += 3) {
       box.expandByPoint(new THREE.Vector3(this.base[i], this.base[i + 1], this.base[i + 2]));
     }
+    if (!box.isEmpty()) {
+      const size = box.getSize(new THREE.Vector3());
+      this.modelSize = Math.max(size.x, size.y, size.z, 1);
+    }
+    return box;
+  }
+
+  fit(): void {
+    const box = this.updateBounds();
     if (box.isEmpty()) return;
     const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    this.modelSize = Math.max(size.x, size.y, size.z, 1);
     const radius = this.modelSize * 0.5;
     const dist = (radius / Math.tan((this.camera.fov * Math.PI) / 360)) * 2.4;
 

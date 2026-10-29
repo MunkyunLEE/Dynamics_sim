@@ -9,6 +9,13 @@ export interface Material {
   rho: number;
 }
 
+export type ShapeType = 'rect' | 'rhs' | 'circle' | 'pipe' | 'h';
+
+export interface ShapeSpec {
+  type: ShapeType;
+  dims: number[];
+}
+
 export interface BarSection {
   id: string;
   type: 'bar';
@@ -16,6 +23,7 @@ export interface BarSection {
   Iy: number;
   Iz: number;
   J: number;
+  shape?: ShapeSpec;
 }
 
 export interface ShellSection {
@@ -40,11 +48,14 @@ export interface BarDef {
   orient?: Vec3;
 }
 
+export type PanelKind = 'shell' | 'solid';
+
 export interface PanelDef {
   id: string;
   mat: string;
   sec: string;
   tris: [number, number, number][];
+  kind?: PanelKind;
 }
 
 export type HingeType = 'rigid' | 'free' | 'spring' | 'none';
