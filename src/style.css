@@ -307,3 +307,17 @@ select.btn { padding: 5px 8px; }
 }
 .th-section .form input[type='file'] { width: 100%; }
 .form label.stack { flex-direction: column; align-items: flex-start; }
+
+.ws-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-right: 8px; }
+.ws-switch button { background: transparent; color: var(--muted); border: 0; padding: 6px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+.ws-switch button.active { background: #1f3a57; color: var(--text); }
+body[data-ws='kinematics'] .ws-dyn, body[data-ws='kinematics'] .dock { display: none !important; }
+body:not([data-ws='kinematics']) .ws-kin { display: none !important; }
+body[data-ws='kinematics'] #viewport > canvas { outline: 2px solid rgba(255, 122, 89, 0.25); outline-offset: -2px; }
+.hinge-table { max-height: 320px; overflow-y: auto; margin-top: 6px; }
+#sidebar table.hinge-rows td { padding: 2px 3px; font-size: 11px; text-align: left; }
+#sidebar table.hinge-rows th { text-align: left; font-size: 11px; }
+#sidebar table.hinge-rows select { background: #2d333c; color: var(--text); border: 1px solid var(--line); border-radius: 3px; font-size: 11px; padding: 1px 2px; max-width: 96px; }
+.kin-chart { height: 230px; margin-top: 8px; }
+.kin-chart .chart { height: 100%; }
+#sidebar .form select { width: 150px; }

@@ -9,6 +9,10 @@
   <div id="app">
     <header id="toolbar">
       <span class="title">Structural Vibration Simulator</span>
+      <div class="ws-switch">
+        <button type="button" data-ws="dynamics" class="active">Dynamics</button>
+        <button type="button" data-ws="kinematics">Kinematics</button>
+      </div>
       <label class="btn">
         모델 불러오기 (JSON)
         <input id="file-input" type="file" accept=".json" hidden />
@@ -40,15 +44,51 @@
         <h3>선택</h3>
         <div id="selection-info" class="selection-info"></div>
       </section>
-      <section>
+      <section class="ws-kin">
+        <h3>힌지</h3>
+        <div class="preset-row">
+          <button id="btn-hinge-auto" class="btn">공유 모서리 → 힌지 생성</button>
+          <button id="btn-hinge-clear" class="btn">힌지 모두 삭제</button>
+          <button id="btn-miura" class="btn">미우라 샘플</button>
+        </div>
+        <div id="hinge-info" class="selection-info"></div>
+        <div id="hinge-table" class="hinge-table"></div>
+      </section>
+      <section class="ws-kin">
+        <h3>자유도 해석</h3>
+        <div class="form">
+          <label>기준(고정) 패널 <select id="kin-ground"></select></label>
+          <button id="btn-mobility" class="btn">자유도 해석 실행</button>
+        </div>
+        <div id="mob-report" class="selection-info"></div>
+        <div id="mob-modes" class="preset-row"></div>
+      </section>
+      <section class="ws-kin">
+        <h3>접힘 경로</h3>
+        <div class="form">
+          <label>구동 힌지 <select id="kin-driver"></select></label>
+          <label>목표 접힘각 (°) <input id="kin-target" type="number" step="any" value="90" /></label>
+          <label>단계 수 <input id="kin-steps" type="number" min="1" max="2000" value="60" /></label>
+          <button id="btn-fold" class="btn primary">접힘 경로 계산</button>
+        </div>
+        <div id="kin-note" class="selection-info"></div>
+        <div class="form">
+          <label>단계 <input id="kin-frame" type="range" min="0" max="0" value="0" /></label>
+          <div id="kin-frame-label" class="selection-info"></div>
+          <label class="inline"><input id="kin-play" type="checkbox" /> 왕복 재생</label>
+          <button id="btn-kin-apply" class="btn">현재 형상을 Dynamics 기준 형상으로 적용</button>
+        </div>
+        <div id="kin-chart" class="kin-chart"></div>
+      </section>
+      <section class="ws-dyn">
         <h3>단면 목록</h3>
         <div id="section-table" class="lib"></div>
       </section>
-      <section>
+      <section class="ws-dyn">
         <h3>재료 목록</h3>
         <div id="material-table" class="lib"></div>
       </section>
-      <section>
+      <section class="ws-dyn">
         <h3>지진동 해석 (시간이력)</h3>
         <div id="io-info" class="selection-info"></div>
         <div class="preset-row">
@@ -87,7 +127,7 @@
         </div>
         <div id="th-note" class="selection-info"></div>
       </section>
-      <section>
+      <section class="ws-dyn">
         <h3>모달 해석</h3>
         <div class="form">
           <label>해석 유형

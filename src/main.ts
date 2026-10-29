@@ -18,6 +18,9 @@ import { parseModel } from './io/loadModel';
 import { buildSampleModel } from './core/sample';
 import { setupAnalysis } from './ui/analysis';
 import { setupSeismic } from './ui/seismic';
+import { setupKinematics } from './ui/kinematicsPanel';
+import { buildMiuraSample } from './core/sampleOrigami';
+import { createHinges, detectHingeCandidates, removeHinges } from './core/hinges';
 import { setNodeRole } from './core/edit';
 import { sectionColors } from './core/palette';
 import {
@@ -67,10 +70,14 @@ const seismic = setupSeismic({
     })
 });
 
+let kin: ReturnType<typeof setupKinematics> | null = null;
+let workspace: 'dynamics' | 'kinematics' = 'dynamics';
+
 const analysis = {
   reset(): void {
     modalAnalysis.reset();
     seismic.reset();
+    kin?.reset();
   }
 };
 
@@ -79,7 +86,7 @@ function render(fit: boolean): void {
   const colors = sectionColors(model);
   let barColors: number[] | null = null;
   if (colorBySection) barColors = model.bars.map((b) => colors.get(b.sec) ?? 0x9aa4b2);
-  viewer.setModel(model, { fit, barColors });
+  viewer.setModel(model, { fit, barColors, showHinges: workspace === 'kinematics' });
   viewer.setSelection(sel);
   renderInfo(infoTable, model);
   renderLibrary(sectionBox, materialBox, model, colorBySection ? colors : null, {
@@ -93,6 +100,8 @@ function render(fit: boolean): void {
   });
   renderSelectionInfo(selInfo, model, sel);
   seismic.refresh(model);
+  kin?.refresh();
+  if (workspace === 'kinematics') kin?.activate(true);
   undoBtn.disabled = undoStack.length === 0;
 }
 
@@ -211,6 +220,27 @@ function onContext(hit: Hit | null, x: number, y: number): void {
     items.push({ label: '출력 절점 해제', action: () => env.apply('출력 절점 해제', (mm) => setNodeRole(mm, nodes, 'output', false)) });
     items.push({ label: '같은 높이 절점 선택', action: () => setSelection({ ...emptySelection(), nodes: sameHeightNodes(m, nodes) }) });
   }
+  if (panels.length && workspace === 'kinematics') {
+    if (items.length) items.push({ separator: true });
+    items.push({ header: true, label: `패널 ${panels.length}개 · 기구학` });
+    if (panels.length === 1) items.push({ label: '기준(고정) 패널로 지정', action: () => kin?.setGround(m.panels[panels[0]].id) });
+    const ids = new Set(panels.map((pi) => m.panels[pi].id));
+    if (panels.length >= 2) {
+      items.push({
+        label: '선택 패널 사이 힌지 생성',
+        action: () => {
+          const cands = detectHingeCandidates(m, ids);
+          if (!cands.length) {
+            setStatus('선택한 패널 사이에 공유 모서리가 없습니다.');
+            return;
+          }
+          env.apply('힌지 생성', (mm) => createHinges(mm, cands, 'free'));
+        }
+      });
+    }
+    const related = m.hinges.map((hg, i) => (ids.has(hg.panels[0]) || ids.has(hg.panels[1]) ? i : -1)).filter((i) => i >= 0);
+    items.push({ label: `선택 패널의 힌지 삭제 (${related.length})`, disabled: related.length === 0, action: () => env.apply('힌지 삭제', (mm) => removeHinges(mm, related)) });
+  }
   if (panels.length) {
     if (items.length) items.push({ separator: true });
     items.push({ header: true, label: `패널 ${panels.length}개` });
@@ -305,6 +335,28 @@ fileInput.addEventListener('change', async () => {
   fileInput.value = '';
 });
 
+kin = setupKinematics({ viewer, env, setStatus });
+
+function setWorkspace(ws: 'dynamics' | 'kinematics'): void {
+  if (workspace === ws) return;
+  workspace = ws;
+  document.body.dataset.ws = ws;
+  document.querySelectorAll<HTMLButtonElement>('.ws-switch button').forEach((b) => b.classList.toggle('active', b.dataset.ws === ws));
+  viewer.setModeShape(null);
+  closeMenu();
+  render(false);
+  kin?.activate(ws === 'kinematics');
+  setStatus(ws === 'kinematics' ? 'Kinematics: 힌지·자유도·접힘 경로' : 'Dynamics: 모드·지진동 해석');
+}
+
+document.querySelectorAll<HTMLButtonElement>('.ws-switch button').forEach((b) =>
+  b.addEventListener('click', () => setWorkspace(b.dataset.ws as 'dynamics' | 'kinematics'))
+);
+
+document.getElementById('btn-miura')!.addEventListener('click', () => {
+  load(buildMiuraSample(), '미우라 오리가미 샘플');
+});
+
 document.getElementById('btn-sample')!.addEventListener('click', () => {
   load(buildSampleModel(), '샘플 모델');
 });
@@ -313,4 +365,5 @@ document.getElementById('btn-fit')!.addEventListener('click', () => {
   viewer.fit();
 });
 
+document.body.dataset.ws = workspace;
 load(buildSampleModel(), '샘플 모델');

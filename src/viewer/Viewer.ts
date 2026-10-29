@@ -13,7 +13,10 @@ interface Target {
 export interface ModelOptions {
   fit?: boolean;
   barColors?: number[] | null;
+  showHinges?: boolean;
 }
+
+const HINGE_COLOR: Record<string, number> = { free: 0xff7a59, spring: 0xc792ea, rigid: 0x8a93a3, none: 0x4a4f57 };
 
 export class Viewer {
   readonly camera: THREE.PerspectiveCamera;
@@ -35,6 +38,11 @@ export class Viewer {
   private model: StructuralModel | null = null;
   private modelSize = 1;
   private shape: Float64Array | null = null;
+  private staticDisp: Float64Array | null = null;
+  private hingeEdges = new Int32Array(0);
+  private hlHinges: number[] = [];
+  private lastSel: Selection | null = null;
+  private lastK = 0;
   private amplitude = 1;
   private playing = true;
   private phase = 0;
@@ -65,8 +73,14 @@ export class Viewer {
     this.renderer.setAnimationLoop((time: number) => this.frame(time));
   }
 
-  getBase(): Float64Array {
+  getBaseReference(): Float64Array {
     return this.base;
+  }
+
+  getBase(): Float64Array {
+    if (!this.staticDisp) return this.base;
+    const st = this.staticDisp;
+    return this.base.map((v, i) => v + st[i]);
   }
 
   private frame(time: number): void {
@@ -107,7 +121,8 @@ export class Viewer {
       const arr = t.attr.array as Float32Array;
       for (let i = 0; i < t.nodes.length; i++) {
         const n = t.nodes[i] * 3;
-        for (let d = 0; d < 3; d++) arr[i * 3 + d] = this.base[n + d] + (shape ? shape[n + d] * k : 0);
+        const st = this.staticDisp;
+        for (let d = 0; d < 3; d++) arr[i * 3 + d] = this.base[n + d] + (st ? st[n + d] : 0) + (shape ? shape[n + d] * k : 0);
       }
       t.attr.needsUpdate = true;
     }
@@ -115,9 +130,20 @@ export class Viewer {
 
   private applyShape(s: number): void {
     const k = this.amplitude * this.modelSize * 0.1 * s;
+    this.lastK = k;
     this.applyTargets(this.targets, k);
     this.applyTargets(this.overlayTargets, k);
     for (const g of this.panelGeoms) g.computeVertexNormals();
+  }
+
+  setStaticDisplacement(disp: Float64Array | null): void {
+    this.staticDisp = disp;
+    this.applyShape(this.shape ? Math.sin(this.phase) : 0);
+  }
+
+  setHingeHighlight(idx: number[]): void {
+    this.hlHinges = idx;
+    if (this.lastSel) this.setSelection(this.lastSel);
   }
 
   setModeShape(shape: Float64Array | null): void {
@@ -158,6 +184,7 @@ export class Viewer {
     this.panelTris = [];
     this.panelNodes = [];
     this.shape = null;
+    this.staticDisp = null;
     this.model = model;
 
     const index = new Map<number, number>();
@@ -240,6 +267,32 @@ export class Viewer {
       add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: solid ? 0xe0c48a : 0xc9d3e0 })));
     });
 
+    this.hingeEdges = new Int32Array(model.hinges.length * 2).fill(-1);
+    model.hinges.forEach((hg, i) => {
+      if (!hg.edge) return;
+      this.hingeEdges[i * 2] = index.get(hg.edge[0]) ?? -1;
+      this.hingeEdges[i * 2 + 1] = index.get(hg.edge[1]) ?? -1;
+    });
+    if (opts.showHinges && model.hinges.length > 0) {
+      const nodes: number[] = [];
+      const rgb: number[] = [];
+      const c = new THREE.Color();
+      model.hinges.forEach((hg, i) => {
+        if (this.hingeEdges[i * 2] < 0 || this.hingeEdges[i * 2 + 1] < 0) return;
+        nodes.push(this.hingeEdges[i * 2], this.hingeEdges[i * 2 + 1]);
+        c.setHex(HINGE_COLOR[hg.type] ?? 0xff7a59);
+        rgb.push(c.r, c.g, c.b, c.r, c.g, c.b);
+      });
+      if (nodes.length) {
+        const g = new THREE.BufferGeometry();
+        this.register(this.targets, g, nodes);
+        g.setAttribute('color', new THREE.Float32BufferAttribute(rgb, 3));
+        const lines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false }));
+        lines.renderOrder = 5;
+        add(lines);
+      }
+    }
+
     const nodePts = this.base.length / 3;
     this.addPoints(this.range(nodePts), 0xe6edf7, 5, add);
     this.addPoints((model.inputNodes ?? []).map((id) => index.get(id)!).filter((i) => i !== undefined), 0x5be37d, 15, add);
@@ -263,6 +316,7 @@ export class Viewer {
   }
 
   setSelection(sel: Selection): void {
+    this.lastSel = sel;
     this.clearGroup(this.overlay);
     this.overlayTargets = [];
     if (!this.model) return;
@@ -271,6 +325,19 @@ export class Viewer {
       obj.renderOrder = 10;
       this.overlay.add(obj);
     };
+
+    const hl: number[] = [];
+    for (const i of this.hlHinges) {
+      if (this.hingeEdges[i * 2] >= 0 && this.hingeEdges[i * 2 + 1] >= 0) hl.push(this.hingeEdges[i * 2], this.hingeEdges[i * 2 + 1]);
+    }
+    if (hl.length) {
+      const g = new THREE.BufferGeometry();
+      this.register(this.overlayTargets, g, hl);
+      add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xffe066, depthTest: false })));
+      const ends = new THREE.BufferGeometry();
+      this.register(this.overlayTargets, ends, hl);
+      add(new THREE.Points(ends, new THREE.PointsMaterial({ color: 0xffe066, size: 9, sizeAttenuation: false, depthTest: false })));
+    }
 
     if (sel.bars.size > 0) {
       const nodes: number[] = [];
@@ -300,6 +367,7 @@ export class Viewer {
         )
       );
     }
+    this.applyTargets(this.overlayTargets, this.lastK);
   }
 
   private updateBounds(): THREE.Box3 {

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "esbuild tests/modal.check.ts --bundle --platform=node --format=esm --outfile=.tmp/modal.check.mjs --log-level=warning && node .tmp/modal.check.mjs && esbuild tests/sections.check.ts --bundle --platform=node --format=esm --outfile=.tmp/sections.check.mjs --log-level=warning && node .tmp/sections.check.mjs && esbuild tests/timehistory.check.ts --bundle --platform=node --format=esm --outfile=.tmp/timehistory.check.mjs --log-level=warning && node .tmp/timehistory.check.mjs && esbuild tests/shell.check.ts --bundle --platform=node --format=esm --outfile=.tmp/shell.check.mjs --log-level=warning && node .tmp/shell.check.mjs"
+    "test": "esbuild tests/modal.check.ts --bundle --platform=node --format=esm --outfile=.tmp/modal.check.mjs --log-level=warning && node .tmp/modal.check.mjs && esbuild tests/sections.check.ts --bundle --platform=node --format=esm --outfile=.tmp/sections.check.mjs --log-level=warning && node .tmp/sections.check.mjs && esbuild tests/timehistory.check.ts --bundle --platform=node --format=esm --outfile=.tmp/timehistory.check.mjs --log-level=warning && node .tmp/timehistory.check.mjs && esbuild tests/shell.check.ts --bundle --platform=node --format=esm --outfile=.tmp/shell.check.mjs --log-level=warning && node .tmp/shell.check.mjs && esbuild tests/kinematics.check.ts --bundle --platform=node --format=esm --outfile=.tmp/kinematics.check.mjs --log-level=warning && node .tmp/kinematics.check.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"

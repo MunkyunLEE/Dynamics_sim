@@ -66,6 +66,19 @@ export interface HingeDef {
   type: HingeType;
   ktheta?: number;
   refAngle?: number;
+  edge?: [number, number];
+  mv?: number;
+}
+
+export interface DriverDef {
+  hinge: string;
+  angle: number;
+}
+
+export interface KinematicsDef {
+  ground?: string;
+  drivers: DriverDef[];
+  steps?: number;
 }
 
 export interface MassDef {
@@ -105,4 +118,5 @@ export interface StructuralModel {
   damping: DampingDef;
   inputNodes?: number[];
   outputNodes?: number[];
+  kinematics?: KinematicsDef;
 }

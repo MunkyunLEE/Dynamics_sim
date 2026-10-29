@@ -37,6 +37,7 @@ export function parseModel(text: string): StructuralModel {
     damping: raw.damping ?? { mode: 'modal', xi: 0.05, rayleigh: null }
   };
 
+  if (raw.kinematics) model.kinematics = { ...raw.kinematics, drivers: raw.kinematics.drivers ?? [] };
   if (raw.inputNodes?.length) model.inputNodes = [...raw.inputNodes];
   if (raw.outputNodes?.length) model.outputNodes = [...raw.outputNodes];
 
@@ -72,6 +73,11 @@ export function parseModel(text: string): StructuralModel {
   }
   for (const s of model.supports) {
     if (!nodeIds.has(s.node)) fail(`지점: 존재하지 않는 절점 ${s.node}`);
+  }
+  const panelIds = new Set(model.panels.map((p) => p.id));
+  for (const hg of model.hinges) {
+    if (!panelIds.has(hg.panels[0]) || !panelIds.has(hg.panels[1])) fail(`힌지 ${hg.id}: 존재하지 않는 패널을 참조합니다.`);
+    if (hg.edge && (!nodeIds.has(hg.edge[0]) || !nodeIds.has(hg.edge[1]))) fail(`힌지 ${hg.id}: 존재하지 않는 절점을 참조합니다.`);
   }
   for (const id of [...(model.inputNodes ?? []), ...(model.outputNodes ?? [])]) {
     if (!nodeIds.has(id)) fail(`입출력 절점: 존재하지 않는 절점 ${id}`);

@@ -65,3 +65,16 @@
 - 상단 전환 탭으로 두 작업공간을 나누되 하나의 모델 상태(절점, 요소, 힌지, 경계조건)와 하나의 결과 저장소를 공유한다.
 - Kinematics 결과(접힘 각도, 전개 경로의 형상)는 Dynamics 에서 해석 기준 형상으로 선택할 수 있다.
 - Dynamics 결과(모드, 응답)는 Kinematics 화면에서 같은 모델 위에 겹쳐 볼 수 있다.
+
+## Stage 4: Kinematics 작업공간 (강체 오리가미)
+
+참고문헌: Tachi, "Simulation of Rigid Origami" (4OSME, 2009); Tachi, "Design of Infinitesimally and Finitely Flexible Origami" (2012); Imada & Tachi, "Programming sequential deployment of origami via kinematic transition fronts" (PNAS, 2026); Imada & Tachi, "Maxwell origami tube" (PRR, 2025); Imada, Hull, Ku & Tachi, "Nonlinear Kinematics of Recursive Origami Inspired by the Spidron" (Origami8).
+
+- 변수: 회전 힌지의 접힘각 ρ (잠금 힌지로 묶인 패널은 하나의 강체).
+- 구속: 패널 인접 그래프의 신장 트리 밖 힌지마다 폐합 조건 T_a·exp(ξρ)·T_b⁻¹ = I. 내부 꼭짓점 루프는 독립 식 3개, 구멍·고리 루프는 6개가 된다 (Tachi 2012).
+- 야코비안: 현재 형상의 힌지 나사축(twist) 합 Σ ±ξ'_k dρ_k 로 해석적으로 계산.
+- 경로: Δρ = (I − C⁺C)Δρ₀ 예측 (Δρ₀ 는 구동 힌지 + 산·골 지정 힌지), 구동 힌지를 고정한 최소노름 Gauss–Newton 보정. 수렴 실패 시 단계 이분.
+- 자유도: 무한소 자유도 N − rank C, Maxwell 예측 N − 3V − 6H, 자기응력 수 = (3V + 6H) − rank C. 평면 상태는 trivial shakiness 경고.
+- 각도 부호: 힌지 첫 패널의 앞면(삼각형 감김 방향) 기준 골 +, 산 −.
+- 검증: 평탄접힘 4절 꼭짓점 두 분기(σ = ±1)가 Imada–Tachi Eq.1 과 1e-6 이내 일치, 미우라 3×3 은 자유도 1 · 예측 0 · 자기응력 1.
+- 공유: 접힘 단계 형상을 모델 절점 좌표로 적용하면 Dynamics 해석이 그 형상으로 수행된다. 현재 Dynamics 에서는 힌지가 강접(패널 공유 절점)으로 취급된다.
