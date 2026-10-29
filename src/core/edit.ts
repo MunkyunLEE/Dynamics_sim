@@ -104,3 +104,15 @@ export function materialUsage(model: StructuralModel): Map<string, number> {
   for (const p of model.panels) out.set(p.mat, (out.get(p.mat) ?? 0) + 1);
   return out;
 }
+
+export function setNodeRole(model: StructuralModel, nodes: Iterable<number>, role: 'input' | 'output', on: boolean): void {
+  const key = role === 'input' ? 'inputNodes' : 'outputNodes';
+  const set = new Set(model[key] ?? []);
+  for (const ni of nodes) {
+    const id = model.nodes[ni].id;
+    if (on) set.add(id);
+    else set.delete(id);
+  }
+  if (set.size === 0) delete model[key];
+  else model[key] = [...set];
+}

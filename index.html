@@ -49,6 +49,45 @@
         <div id="material-table" class="lib"></div>
       </section>
       <section>
+        <h3>지진동 해석 (시간이력)</h3>
+        <div id="io-info" class="selection-info"></div>
+        <div class="preset-row">
+          <button id="btn-inputs-from-supports" class="btn" title="지점이 있는 절점을 모두 입력 절점으로 지정">지점 → 입력 절점</button>
+          <button id="btn-io-clear" class="btn">입출력 지정 해제</button>
+        </div>
+        <div class="form">
+          <label class="stack">지진동 CSV (t, ax, ay, az)
+            <input id="motion-file" type="file" accept=".csv,.txt,.dat" />
+          </label>
+          <label>가속도 단위
+            <select id="motion-unit">
+              <option value="g">g</option>
+              <option value="mm/s2">mm/s²</option>
+              <option value="m/s2">m/s²</option>
+              <option value="gal">gal (cm/s²)</option>
+            </select>
+          </label>
+          <label>배율 <input id="motion-scale" type="number" step="any" value="1" /></label>
+          <label>후행 자유진동 (s) <input id="motion-tail" type="number" min="0" step="any" value="0" /></label>
+        </div>
+        <div id="motion-info" class="selection-info"></div>
+        <div class="form">
+          <label>감쇠
+            <select id="th-damp">
+              <option value="modal">모드별 ξ</option>
+              <option value="rayleigh">Rayleigh</option>
+            </select>
+          </label>
+          <label>ξ (%) <input id="th-xi" type="number" step="any" value="5" /></label>
+          <label>Rayleigh α (1/s) <input id="th-alpha" type="number" step="any" value="0" /></label>
+          <label>Rayleigh β (s) <input id="th-beta" type="number" step="any" value="0" /></label>
+          <label>최대 모드 수 <input id="th-modes" type="number" min="1" max="500" value="60" /></label>
+          <label>목표 유효질량 (%) <input id="th-mass" type="number" min="10" max="100" value="90" /></label>
+          <button id="btn-th" class="btn primary">지진동 해석 실행</button>
+        </div>
+        <div id="th-note" class="selection-info"></div>
+      </section>
+      <section>
         <h3>모달 해석</h3>
         <div class="form">
           <label>해석 유형

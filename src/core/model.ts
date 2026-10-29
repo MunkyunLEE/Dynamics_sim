@@ -103,4 +103,6 @@ export interface StructuralModel {
   masses: MassDef[];
   supports: SupportDef[];
   damping: DampingDef;
+  inputNodes?: number[];
+  outputNodes?: number[];
 }

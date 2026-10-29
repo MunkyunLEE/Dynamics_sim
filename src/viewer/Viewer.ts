@@ -242,6 +242,8 @@ export class Viewer {
 
     const nodePts = this.base.length / 3;
     this.addPoints(this.range(nodePts), 0xe6edf7, 5, add);
+    this.addPoints((model.inputNodes ?? []).map((id) => index.get(id)!).filter((i) => i !== undefined), 0x5be37d, 15, add);
+    this.addPoints((model.outputNodes ?? []).map((id) => index.get(id)!).filter((i) => i !== undefined), 0x4dd0ff, 13, add);
     this.addPoints(model.supports.map((s) => index.get(s.node)!), 0xffa94d, 11, add);
     this.addPoints(model.masses.map((m) => index.get(m.node)!), 0xff5fa2, 9, add);
 

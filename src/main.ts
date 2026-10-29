@@ -17,6 +17,8 @@ import type { EditorEnv } from './ui/env';
 import { parseModel } from './io/loadModel';
 import { buildSampleModel } from './core/sample';
 import { setupAnalysis } from './ui/analysis';
+import { setupSeismic } from './ui/seismic';
+import { setNodeRole } from './core/edit';
 import { sectionColors } from './core/palette';
 import {
   barsWithSection,
@@ -53,7 +55,24 @@ const setStatus = (text: string): void => {
   status.textContent = text;
 };
 
-const analysis = setupAnalysis({ viewer, getModel: () => model, setStatus });
+const modalAnalysis = setupAnalysis({ viewer, getModel: () => model, setStatus });
+
+const seismic = setupSeismic({
+  host: document.getElementById('viewport')!,
+  getModel: () => model,
+  setStatus,
+  setDamping: (mode, xi, alpha, beta) =>
+    env.apply('감쇠 설정', (m) => {
+      m.damping = { mode, xi, rayleigh: mode === 'rayleigh' ? { alpha, beta } : m.damping.rayleigh };
+    })
+});
+
+const analysis = {
+  reset(): void {
+    modalAnalysis.reset();
+    seismic.reset();
+  }
+};
 
 function render(fit: boolean): void {
   if (!model) return;
@@ -73,6 +92,7 @@ function render(fit: boolean): void {
     }
   });
   renderSelectionInfo(selInfo, model, sel);
+  seismic.refresh(model);
   undoBtn.disabled = undoStack.length === 0;
 }
 
@@ -185,6 +205,10 @@ function onContext(hit: Hit | null, x: number, y: number): void {
     items.push({ header: true, label: `절점 ${nodes.length}개` });
     items.push({ label: '지점 설정…', action: () => openSupportDialog(env, nodes) });
     items.push({ label: '집중질량 설정…', action: () => openMassDialog(env, nodes) });
+    items.push({ label: '입력 절점으로 지정', action: () => env.apply('입력 절점 지정', (mm) => setNodeRole(mm, nodes, 'input', true)) });
+    items.push({ label: '입력 절점 해제', action: () => env.apply('입력 절점 해제', (mm) => setNodeRole(mm, nodes, 'input', false)) });
+    items.push({ label: '출력 절점으로 지정', action: () => env.apply('출력 절점 지정', (mm) => setNodeRole(mm, nodes, 'output', true)) });
+    items.push({ label: '출력 절점 해제', action: () => env.apply('출력 절점 해제', (mm) => setNodeRole(mm, nodes, 'output', false)) });
     items.push({ label: '같은 높이 절점 선택', action: () => setSelection({ ...emptySelection(), nodes: sameHeightNodes(m, nodes) }) });
   }
   if (panels.length) {
@@ -223,6 +247,26 @@ colorBtn.addEventListener('click', () => {
 });
 
 undoBtn.addEventListener('click', undo);
+
+document.getElementById('btn-inputs-from-supports')!.addEventListener('click', () => {
+  if (!model) return;
+  const idx = new Map(model.nodes.map((n, i) => [n.id, i]));
+  const nodes = model.supports.map((s) => idx.get(s.node)!);
+  if (nodes.length === 0) {
+    setStatus('지점이 없습니다. 먼저 지점을 설정해 주세요.');
+    return;
+  }
+  env.apply('입력 절점 지정', (mm) => setNodeRole(mm, nodes, 'input', true));
+});
+
+document.getElementById('btn-io-clear')!.addEventListener('click', () => {
+  if (!model) return;
+  const all = model.nodes.map((_, i) => i);
+  env.apply('입출력 지정 해제', (mm) => {
+    setNodeRole(mm, all, 'input', false);
+    setNodeRole(mm, all, 'output', false);
+  });
+});
 
 document.getElementById('btn-save')!.addEventListener('click', () => {
   if (!model) return;

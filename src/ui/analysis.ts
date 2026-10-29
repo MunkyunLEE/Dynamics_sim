@@ -87,7 +87,7 @@ export function setupAnalysis({ viewer, getModel, setStatus }: Deps) {
     runBtn.disabled = true;
     note.textContent = '';
     setStatus('고유치 해석 중...');
-    worker.postMessage({ model, options });
+    worker.postMessage({ kind: 'modal', model, options });
   });
 
   table.addEventListener('click', (e) => {

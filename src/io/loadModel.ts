@@ -37,6 +37,9 @@ export function parseModel(text: string): StructuralModel {
     damping: raw.damping ?? { mode: 'modal', xi: 0.05, rayleigh: null }
   };
 
+  if (raw.inputNodes?.length) model.inputNodes = [...raw.inputNodes];
+  if (raw.outputNodes?.length) model.outputNodes = [...raw.outputNodes];
+
   if (model.nodes.length === 0) fail('절점이 없습니다.');
 
   const nodeIds = new Set<number>();
@@ -69,6 +72,9 @@ export function parseModel(text: string): StructuralModel {
   }
   for (const s of model.supports) {
     if (!nodeIds.has(s.node)) fail(`지점: 존재하지 않는 절점 ${s.node}`);
+  }
+  for (const id of [...(model.inputNodes ?? []), ...(model.outputNodes ?? [])]) {
+    if (!nodeIds.has(id)) fail(`입출력 절점: 존재하지 않는 절점 ${id}`);
   }
 
   return model;

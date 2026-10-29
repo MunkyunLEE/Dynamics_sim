@@ -17,7 +17,7 @@ export interface ModalResult {
   notes: string[];
 }
 
-function factorMass(M: Float64Array, n: number, notes: string[]): Float64Array {
+export function factorMass(M: Float64Array, n: number, notes: string[]): Float64Array {
   const L = new Float64Array(M);
   if (cholesky(L, n)) return L;
   let maxDiag = 0;
