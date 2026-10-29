@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structural Vibration Simulator</title>
+</head>
+<body>
+  <div id="app">
+    <header id="toolbar">
+      <span class="title">Structural Vibration Simulator</span>
+      <label class="btn">
+        모델 불러오기 (JSON)
+        <input id="file-input" type="file" accept=".json" hidden />
+      </label>
+      <button id="btn-sample" class="btn">샘플 모델</button>
+      <button id="btn-fit" class="btn">전체 보기</button>
+    </header>
+    <aside id="sidebar">
+      <section>
+        <h3>단위계</h3>
+        <table id="units-table"></table>
+      </section>
+      <section>
+        <h3>모델 정보</h3>
+        <table id="info-table"></table>
+      </section>
+      <section>
+        <h3>모달 해석</h3>
+        <div class="form">
+          <label>해석 유형
+            <select id="modal-type">
+              <option value="free">Free-free</option>
+              <option value="constrained">지점 구속</option>
+            </select>
+          </label>
+          <label>모드 개수
+            <input id="modal-count" type="number" min="1" max="60" value="12" />
+          </label>
+          <button id="btn-modal" class="btn">고유치 해석 실행</button>
+        </div>
+        <table id="modal-table" class="results"></table>
+        <div id="modal-note"></div>
+        <div class="form">
+          <label>변형 진폭
+            <input id="amp" type="range" min="0" max="300" value="100" />
+          </label>
+          <label class="inline"><input id="play" type="checkbox" checked /> 애니메이션</label>
+        </div>
+      </section>
+    </aside>
+    <main id="viewport"></main>
+    <footer id="statusbar"><span id="status">준비됨</span></footer>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
